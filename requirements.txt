@@ -1,0 +1,19 @@
+deface @ git+https://github.com/ORB-HD/deface@09b670db307b970cff6fad1848cf04d5f0810ec4
+et_xmlfile==2.0.0
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+lazy_loader==0.4
+networkx==3.4.2
+numpy==2.2.5
+openpyxl==3.1.5
+packaging==25.0
+pandas==2.2.3
+pillow==11.2.1
+python-dateutil==2.9.0.post0
+pytz==2025.2
+scikit-image==0.25.2
+scipy==1.15.2
+six==1.17.0
+tifffile==2025.3.30
+tqdm==4.67.1
+tzdata==2025.2
