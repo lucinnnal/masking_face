@@ -3,6 +3,19 @@ import cv2
 import numpy as np
 from pathlib import Path
 
+
+# Face masker
+
+
+
+
+
+
+
+
+
+
+
 # Cropping video after detecting human
 class VideoCropper:
     def __init__(self, confidence=0.3, iou=0.45):
