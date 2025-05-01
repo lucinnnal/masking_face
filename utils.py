@@ -8,10 +8,24 @@ import imageio.v2 as iio
 from src.centerface import CenterFace
 from pathlib import Path
 import os
+import json
+
+# Modify json path
+def modify_json_paths(json_path):
+    with open(json_path, 'r') as f:
+        video_paths = json.load(f)
+    
+    modified_paths = [path.replace('../', './') for path in video_paths]
+    
+    with open(json_path, 'w') as f:
+        json.dump(modified_paths, f, indent=4)
+    
+    print(f"Modified {len(video_paths)} paths in {json_path}")
 
 # VideoProcessor : Cropper + Masker
 class VideoProcessor:
     def __init__(self,
+                 json_path=None,
                  yolo_confidence=0.3,
                  yolo_iou=0.45,
                  face_threshold=0.2,
@@ -23,6 +37,7 @@ class VideoProcessor:
         """
         비디오 크롭 및 얼굴 마스킹을 위한 통합 클래스
         Args:
+            json_path (str, optional): 비디오 경로 리스트가 담긴 JSON 파일 경로
             yolo_confidence (float): YOLOv5 confidence threshold
             yolo_iou (float): YOLOv5 IOU threshold
             face_threshold (float): 얼굴 검출 임계값
@@ -47,14 +62,20 @@ class VideoProcessor:
         self.ellipse = ellipse
         self.draw_scores = draw_scores
         self.mosaicsize = mosaicsize
+        
+        # JSON 파일 경로 저장
+        self.json_path = json_path
 
-    def process_video(self, video_path, output_path):
+    def process_video(self, video_path, output_dir):
         """
         비디오를 크롭하고 얼굴을 마스킹하여 저장
         Args:
             video_path (str): 입력 비디오 경로
             output_path (str): 출력 비디오 경로
         """
+        video_name = Path(video_path).stem
+        output_path = str(Path(output_dir) / f"{video_name}_processed.mp4")
+
         cap = cv2.VideoCapture(video_path)
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         
@@ -227,19 +248,46 @@ class VideoProcessor:
         from skimage.draw import ellipse
         return ellipse(height // 2, width // 2, height // 2, width // 2)
 
-if __name__ == "__main__":
-
-    processor = VideoProcessor(
-        yolo_confidence=0.3,
-        yolo_iou=0.45,
-        face_threshold=0.2,
-        mask_scale=1.3,
-        blur_type='blur',
-        ellipse=True
-    )
-
-    video_path = './sample/04_B2_A 복사본.mp4'
-    output_path = '04_B2_A 복사본_final_processed.mp4'
-    
-    processor.process_video(video_path, output_path)
-    print(f"Processing completed: {output_path}")
+    def process_videos_from_json(self, json_path, output_dir='processed'):
+        """
+        JSON 파일에 있는 비디오 파일들을 일괄 처리
+        Args:
+            json_path (str): 비디오 경로 리스트가 담긴 JSON 파일 경로
+            output_dir (str): 처리된 비디오들을 저장할 디렉토리 경로
+        Returns:
+            list: 처리된 비디오 파일 경로 리스트
+        """
+        # JSON 파일 읽기
+        with open(json_path, 'r') as f:
+            video_paths = json.load(f)
+            
+        if not isinstance(video_paths, list):
+            raise ValueError("JSON 파일은 비디오 경로 리스트를 포함해야 합니다.")
+            
+        # 출력 디렉토리 생성
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        processed_paths = []
+        total_videos = len(video_paths)
+        
+        # 각 비디오 처리
+        for idx, video_path in enumerate(video_paths, 1):
+            try:
+                # 출력 파일 경로 설정
+                video_name = Path(video_path).stem
+                output_path = str(output_dir / f"{video_name}_processed.mp4")
+                
+                # 비디오 처리
+                print(f"Processing video {idx}/{total_videos}: {video_name}")
+                self.process_video(video_path, output_path)
+                
+                processed_paths.append(output_path)
+                print(f"Completed: {output_path}")
+                
+            except Exception as e:
+                print(f"Error processing {video_path}: {str(e)}")
+                continue
+        
+        print(f"\nProcessing completed. {len(processed_paths)}/{total_videos} videos processed successfully.")
+        return processed_paths
