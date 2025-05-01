@@ -6,6 +6,7 @@ from src.centerface import CenterFace
 from pathlib import Path
 import os
 
+# Face masker -> Blurring face
 class Facemasker:
     def __init__(self, 
                  threshold=0.2,
