@@ -1,0 +1,4 @@
+cropped/
+sample/
+*.pt
+__pycache__/
