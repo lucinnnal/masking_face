@@ -128,9 +128,6 @@ def process_video(video_path, output_path):
             target_box = tracking_dict[longest_tracked_id]['position']
             x1, y1, x2, y2 = target_box
             
-            # 바운딩 박스 그리기
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            
             # 크롭용 중심점 계산
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
@@ -157,13 +154,6 @@ def process_video(video_path, output_path):
         
         # 결과 프레임 저장
         out.write(frame)
-        
-        # 화면에 결과 표시 (선택사항)
-        """"
-        cv2.imshow('Detection', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-        """
     
     # 리소스 해제
     cap.release()
