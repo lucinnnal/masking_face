@@ -302,27 +302,14 @@ class VideoProcessor:
                     print(f"Error processing {video_path}: {str(e)}")
                     continue
             
-            # 배치 처리 후 메모리 정리 및 모델 리셋
-            print(f"Batch {batch_idx//batch_size + 1} completed. Resetting models...")
-            
-            # 메모리 정리
+            # 배치 처리 후 메모리 정리
             import gc
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()
             
-            # YOLO 모델 리셋
-            self.yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
-            if torch.cuda.is_available():
-                self.yolo_model.cuda()
-            self.yolo_model.conf = self.yolo_model.conf
-            self.yolo_model.iou = self.yolo_model.iou
-            
-            # CenterFace 모델 리셋
-            self.face_detector = CenterFace(backend='auto')
-            
-            print("Models reset completed. Taking a short break...")
+            # 잠시 대기
+            print(f"Batch {batch_idx//batch_size + 1} completed. Taking a short break...")
             import time
             time.sleep(5)  # 5초 대기
         
