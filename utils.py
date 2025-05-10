@@ -73,10 +73,19 @@ class VideoProcessor:
             video_path (str): 입력 비디오 경로
             output_path (str): 출력 비디오 경로
         """
+        # 비디오 파일 존재 확인
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"비디오 파일을 찾을 수 없습니다: {video_path}")
+        
+        # 출력 디렉토리 확인 및 생성
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
         video_name = Path(video_path).stem
-        output_path = str(Path(output_dir) / f"{video_name}_processed.mp4")
+        output_path = str(output_dir / f"{video_name}_processed.mp4")
 
         cap = cv2.VideoCapture(video_path)
+
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         
         # 최대 바운딩 박스 크기 계산
