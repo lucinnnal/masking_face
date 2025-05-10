@@ -1,6 +1,6 @@
 cropped/
 sample/
-processed/
+processed_video/
 
 *.pt
 
