@@ -328,3 +328,156 @@ class VideoProcessor:
         
         print(f"\nAll processing completed. {len(processed_paths)}/{total_videos} videos processed successfully.")
         return processed_paths
+
+class VideoCropper:
+    def __init__(self,
+                 json_path=None,
+                 yolo_confidence=0.3,
+                 yolo_iou=0.45):
+        """
+        비디오 크롭을 위한 클래스
+        Args:
+            json_path (str, optional): 비디오 경로 리스트가 담긴 JSON 파일 경로
+            yolo_confidence (float): YOLOv5 confidence threshold
+            yolo_iou (float): YOLOv5 IOU threshold
+        """
+        # YOLO 모델 초기화
+        self.yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
+        if torch.cuda.is_available():
+            self.yolo_model.cuda()
+        self.yolo_model.conf = yolo_confidence
+        self.yolo_model.iou = yolo_iou
+        
+        # JSON 파일 경로 저장
+        self.json_path = json_path
+
+    def process_video(self, video_path, output_dir):
+        """
+        비디오를 크롭하여 저장
+        Args:
+            video_path (str): 입력 비디오 경로
+            output_path (str): 출력 비디오 경로
+        """
+        # 비디오 파일 존재 확인
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"비디오 파일을 찾을 수 없습니다: {video_path}")
+        
+        # 출력 디렉토리 확인 및 생성
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        video_name = Path(video_path).stem
+        output_path = str(output_dir / f"{video_name}_cropped.mp4")
+
+        cap = cv2.VideoCapture(video_path)
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        
+        # 최대 바운딩 박스 크기 계산
+        max_size = self._get_max_bbox_size(cap)
+        crop_size = int(max_size * 1.5)
+        
+        # 출력 비디오 설정
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (crop_size, crop_size))
+        
+        tracking_dict = {}
+        next_id = 0
+        
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            if torch.cuda.is_available():
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = self.yolo_model(frame_rgb, size=640)
+                frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+            else:
+                results = self.yolo_model(frame)
+            
+            current_boxes = results.xyxy[0][results.xyxy[0][:, -1] == 0]
+            tracking_dict = self._update_tracking(current_boxes, tracking_dict, next_id)
+            
+            if tracking_dict:
+                cropped = self._get_cropped_frame(frame, tracking_dict, crop_size)
+                out.write(cropped)
+        
+        # 리소스 해제
+        cap.release()
+        out.release()
+        cv2.destroyAllWindows()
+
+    def process_videos_from_json(self, json_path, output_dir='cropped', batch_size=2):
+        """
+        JSON 파일에 있는 비디오 파일들을 배치 단위로 처리
+        Args:
+            json_path (str): 비디오 경로 리스트가 담긴 JSON 파일 경로
+            output_dir (str): 처리된 비디오들을 저장할 디렉토리 경로
+            batch_size (int): 한 번에 처리할 비디오 수
+        Returns:
+            list: 처리된 비디오 파일 경로 리스트
+        """
+        # JSON 파일 읽기
+        with open(json_path, 'r') as f:
+            video_paths = json.load(f)
+            
+        if not isinstance(video_paths, list):
+            raise ValueError("JSON 파일은 비디오 경로 리스트를 포함해야 합니다.")
+            
+        # 출력 디렉토리 생성
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        processed_paths = []
+        total_videos = len(video_paths)
+        
+        # 배치 단위로 처리
+        for batch_idx in range(0, total_videos, batch_size):
+            batch_videos = video_paths[batch_idx:batch_idx + batch_size]
+            print(f"\nProcessing batch {batch_idx//batch_size + 1}/{(total_videos+batch_size-1)//batch_size}")
+            
+            # 배치 내 각 비디오 처리
+            for idx, video_path in enumerate(batch_videos, 1):
+                try:
+                    video_name = Path(video_path).stem
+                    output_path = str(output_dir / f"{video_name}_cropped.mp4")
+                    
+                    print(f"Processing video {batch_idx + idx}/{total_videos}: {video_name}")
+                    self.process_video(video_path, output_path)
+                    
+                    processed_paths.append(output_path)
+                    print(f"Completed: {output_path}")
+                    
+                except Exception as e:
+                    print(f"Error processing {video_path}: {str(e)}")
+                    continue
+            
+            # 배치 처리 후 메모리 정리 및 모델 리셋
+            print(f"Batch {batch_idx//batch_size + 1} completed. Resetting models...")
+            
+            # 메모리 정리
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+            
+            # YOLO 모델 리셋
+            self.yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
+            if torch.cuda.is_available():
+                self.yolo_model.cuda()
+            self.yolo_model.conf = self.yolo_model.conf
+            self.yolo_model.iou = self.yolo_model.iou
+            
+            print("Models reset completed. Taking a short break...")
+            import time
+            time.sleep(5)  # 5초 대기
+        
+        print(f"\nAll processing completed. {len(processed_paths)}/{total_videos} videos processed successfully.")
+        return processed_paths
+
+    # Helper methods (VideoProcessor와 동일)
+    _get_max_bbox_size = VideoProcessor._get_max_bbox_size
+    _update_tracking = VideoProcessor._update_tracking
+    _find_closest_track = VideoProcessor._find_closest_track
+    _get_cropped_frame = VideoProcessor._get_cropped_frame
